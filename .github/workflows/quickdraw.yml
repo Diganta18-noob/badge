@@ -1,0 +1,28 @@
+name: Quickdraw
+
+on:
+  workflow_dispatch:   # run manually once — you only need Quickdraw once
+
+jobs:
+  quickdraw:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Open an issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          ISSUE_URL=$(gh issue create \
+            --repo "$REPO" \
+            --title "Quickdraw badge 🤠" \
+            --body "Opening and closing immediately for the Quickdraw achievement.")
+          echo "ISSUE_URL=$ISSUE_URL" >> $GITHUB_ENV
+
+      - name: Close the issue immediately
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue close "$ISSUE_URL" --comment "Closed for Quickdraw badge 🏆"

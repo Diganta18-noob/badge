@@ -1,0 +1,49 @@
+name: Pull Shark + YOLO
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # runs every 6 hours
+  workflow_dispatch:          # also allows manual trigger
+
+jobs:
+  auto-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create branch and commit
+        run: |
+          BRANCH="badge-run-$(date +%s)"
+          git checkout -b "$BRANCH"
+          echo "Badge run at $(date -u)" >> logs/badge-log.txt
+          git add logs/badge-log.txt
+          git commit -m "chore: badge run $(date -u)"
+          git push origin "$BRANCH"
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
+
+      - name: Create Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_URL=$(gh pr create \
+            --title "chore: badge run $(date -u)" \
+            --body "Automated PR for GitHub badge hunting 🏆" \
+            --base main \
+            --head "$BRANCH")
+          echo "PR_URL=$PR_URL" >> $GITHUB_ENV
+
+      - name: Merge Pull Request (YOLO — no review)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge "$PR_URL" --merge --admin

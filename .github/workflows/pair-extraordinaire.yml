@@ -1,0 +1,44 @@
+name: Pair Extraordinaire
+
+on:
+  workflow_dispatch:   # trigger manually
+
+jobs:
+  pair-commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create co-authored commit
+        run: |
+          BRANCH="pair-$(date +%s)"
+          git checkout -b "$BRANCH"
+          echo "Pair session at $(date -u)" >> logs/pair-log.txt
+          git add logs/pair-log.txt
+          # Replace below with a real GitHub friend's username and email
+          git commit -m "chore: pair session $(date -u)
+
+          Co-authored-by: FRIEND_GITHUB_USERNAME <FRIEND_GITHUB_EMAIL>"
+          git push origin "$BRANCH"
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
+
+      - name: Open and merge PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_URL=$(gh pr create \
+            --title "chore: pair session $(date -u)" \
+            --body "Co-authored PR for Pair Extraordinaire badge 🏆" \
+            --base main \
+            --head "$BRANCH")
+          gh pr merge "$PR_URL" --merge --admin
