@@ -1,0 +1,96 @@
+name: Galaxy Brain Helper
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_repo:
+        description: 'Repo to post discussion answer (owner/repo)'
+        required: false
+        default: ''
+      discussion_number:
+        description: 'Discussion number to answer'
+        required: false
+        default: ''
+      answer_body:
+        description: 'Your answer text'
+        required: false
+        default: ''
+
+# ⚠️ Galaxy Brain requires REAL human interaction:
+#   1. Someone posts a Discussion question
+#   2. You answer it
+#   3. The question author marks YOUR answer as "Accepted"
+#
+# This workflow helps by:
+#   - Creating a Discussion in YOUR repo (if you have Discussions enabled)
+#   - Reminding you to go answer Discussions on other repos
+#   - Logging your Galaxy Brain progress
+
+jobs:
+  galaxy-brain-helper:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      discussions: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull origin main --rebase || true
+
+      - name: Create Galaxy Brain tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Check if we've already created a tracking issue
+          COUNT=$(gh issue list --repo "$REPO" --search "Galaxy Brain Tracker" --state open --limit 1 --json number | jq length)
+          if [ "$COUNT" -eq "0" ]; then
+            gh issue create \
+              --repo "$REPO" \
+              --title "🧠 Galaxy Brain Tracker" \
+              --body "## How to earn Galaxy Brain
+
+          The Galaxy Brain badge **cannot be fully automated** — it requires real community interaction.
+
+          ### Steps:
+          1. **Enable Discussions** on this repo: Settings → General → Features → ✅ Discussions
+          2. **Find repos** with open Discussion questions:
+             - [GitHub Discussions search](https://github.com/search?q=is%3Aopen+type%3Adiscussions&type=discussions)
+             - Filter by language/topic you know well
+          3. **Post a helpful answer** to a question
+          4. **Wait for the author** to mark your answer as ✅ Accepted
+
+          ### Progress:
+          | Tier | Accepted Answers Needed |
+          |---|---|
+          | 🥉 Bronze | 2 |
+          | 🥈 Silver | 8 |
+          | 🥇 Gold | 16 |
+
+          ### Tips:
+          - Answer questions in **popular repos** for better chances
+          - Be thorough and helpful — authors are more likely to accept detailed answers
+          - Focus on repos where you're already knowledgeable
+
+          ---
+          *🤖 Created by Badge Bot*"
+            echo "✅ Created Galaxy Brain tracking issue"
+          else
+            echo "ℹ️ Tracking issue already exists"
+          fi
+
+      - name: Log Galaxy Brain attempt
+        run: |
+          mkdir -p logs
+          echo "🧠 Galaxy Brain helper run at $(date -u) | Run #$GITHUB_RUN_NUMBER" >> logs/galaxy-brain-log.txt
+          git add logs/galaxy-brain-log.txt
+          git commit -m "chore: galaxy brain helper $(date -u +%Y-%m-%dT%H:%M:%S)" || echo "Nothing to commit"
+          git push origin main || true

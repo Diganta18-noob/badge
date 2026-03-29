@@ -1,0 +1,47 @@
+name: Badge Bot Master
+
+on:
+  schedule:
+    - cron: '0 * * * *'     # runs every hour on the hour
+  workflow_dispatch:          # manual trigger
+
+jobs:
+  # ──────────────────────────────────────────────
+  # 1. Quickdraw — only runs if not already earned
+  # ──────────────────────────────────────────────
+  quickdraw:
+    uses: ./.github/workflows/quickdraw.yml
+    permissions:
+      issues: write
+
+  # ──────────────────────────────────────────────
+  # 2. Pull Shark + YOLO — runs every cycle
+  # ──────────────────────────────────────────────
+  pull-shark:
+    needs: quickdraw
+    if: always()
+    uses: ./.github/workflows/pull-shark.yml
+    permissions:
+      contents: write
+      pull-requests: write
+
+  # ──────────────────────────────────────────────
+  # 3. Status report — logs badge hunt results
+  # ──────────────────────────────────────────────
+  report:
+    needs: [quickdraw, pull-shark]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Badge Hunt Summary
+        run: |
+          echo "╔══════════════════════════════════════╗"
+          echo "║     🏆 Badge Bot — Run Summary       ║"
+          echo "╠══════════════════════════════════════╣"
+          echo "║ ⚡ Quickdraw:  ${{ needs.quickdraw.result }}"
+          echo "║ 🦈 Pull Shark: ${{ needs.pull-shark.result }}"
+          echo "║ 🤙 YOLO:       auto (with Pull Shark)"
+          echo "║ 📅 Time:       $(date -u)"
+          echo "║ 🔄 Run:        #$GITHUB_RUN_NUMBER"
+          echo "╚══════════════════════════════════════╝"

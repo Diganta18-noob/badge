@@ -1,9 +1,10 @@
-name: Pull Shark + YOLO
+name: Pull Shark + YOLO Hunter
 
 on:
   schedule:
-    - cron: '0 */6 * * *'   # runs every 6 hours
-  workflow_dispatch:          # also allows manual trigger
+    - cron: '15 * * * *'    # runs every hour at :15
+  workflow_dispatch:          # manual trigger
+  workflow_call:              # callable by master bot
 
 jobs:
   auto-pr:
@@ -15,19 +16,25 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Pull latest main
+        run: git pull origin main --rebase || true
+
       - name: Create branch and commit
         run: |
-          BRANCH="badge-run-$(date +%s)"
+          BRANCH="badge-run-$(date +%s)-$RANDOM"
           git checkout -b "$BRANCH"
-          echo "Badge run at $(date -u)" >> logs/badge-log.txt
+          mkdir -p logs
+          echo "🦈 Pull Shark run at $(date -u) | run=$GITHUB_RUN_NUMBER" >> logs/badge-log.txt
           git add logs/badge-log.txt
-          git commit -m "chore: badge run $(date -u)"
+          git commit -m "chore: badge hunt $(date -u +%Y-%m-%dT%H:%M:%S)"
           git push origin "$BRANCH"
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
 
@@ -36,14 +43,32 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_URL=$(gh pr create \
-            --title "chore: badge run $(date -u)" \
-            --body "Automated PR for GitHub badge hunting 🏆" \
+            --title "🦈 Pull Shark run $(date -u +%H:%M)" \
+            --body "Automated PR for Pull Shark + YOLO badges 🏆
+
+          **Run:** #$GITHUB_RUN_NUMBER
+          **Time:** $(date -u)
+          **Branch:** \`$BRANCH\`" \
             --base main \
             --head "$BRANCH")
           echo "PR_URL=$PR_URL" >> $GITHUB_ENV
+
+      - name: Wait for PR to be ready
+        run: sleep 5
 
       - name: Merge Pull Request (YOLO — no review)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr merge "$PR_URL" --merge --admin
+          for i in 1 2 3 4 5; do
+            gh pr merge "$PR_URL" --merge --admin && break
+            echo "Merge attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+
+      - name: Cleanup — delete merged branch
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git push origin --delete "$BRANCH" || true

@@ -1,124 +1,99 @@
-# 🏆 GitHub Badge Hunter
+# 🤖 GitHub Badge Bot
 
-Auto-earn GitHub profile achievements using GitHub Actions.
+> Fully automated GitHub achievement hunter. Set it up once, collect badges forever.
 
-> **Badges targeted:** `YOLO` · `Pull Shark` · `Quickdraw` · `Pair Extraordinaire`
-
----
-
-## 📁 Repo Structure
-
-```
-badge-hunter/
-├── README.md                          ← this file
-├── logs/
-│   └── .gitkeep                       ← keeps the folder tracked by git
-└── .github/
-    └── workflows/
-        ├── pull-shark.yml             ← earns YOLO + Pull Shark (auto PR & merge)
-        ├── quickdraw.yml              ← earns Quickdraw (open + close issue fast)
-        └── pair-extraordinaire.yml    ← earns Pair Extraordinaire (co-authored PR)
-```
+![Badges Hunted](https://img.shields.io/badge/badges%20hunted-auto-brightgreen)
+![Runs every hour](https://img.shields.io/badge/schedule-hourly-blue)
+![Free tier](https://img.shields.io/badge/cost-free-success)
 
 ---
 
-## ⚙️ One-Time Setup (Do This First!)
+## 🎯 Badges This Bot Hunts
 
-### 1. Create the repo
-
-- Go to [github.com/new](https://github.com/new)
-- Name it `badge-hunter` (or anything you like)
-- Set it to **Public**
-- ✅ Check **"Add a README file"**
-- Click **Create repository**
-
-### 2. Enable Actions write permissions
-
-This is critical — without it, workflows can't push code or merge PRs.
-
-1. Go to your repo → **Settings** → **Actions** → **General**
-2. Scroll to **Workflow permissions**
-3. Select ✅ **"Read and write permissions"**
-4. Also check ✅ **"Allow GitHub Actions to create and approve pull requests"**
-5. Click **Save**
-
-### 3. Push this project
-
-```bash
-git remote add origin https://github.com/YOUR_USERNAME/badge-hunter.git
-git branch -M main
-git push -u origin main
-```
-
----
-
-## 🗂️ Workflow Details
-
-### 🦈 `pull-shark.yml` — Pull Shark + YOLO
-
-| Detail | Value |
-|---|---|
-| **Badges earned** | Pull Shark, YOLO |
-| **Trigger** | Every 6 hours (cron) + manual |
-| **What it does** | Creates a branch → commits a timestamp → opens a PR → merges without review |
-
-> 💡 Click **"Run workflow"** manually from the Actions tab to trigger it multiple times. You need **2 merges** for Bronze, **16** for Silver, **128** for Gold.
-
-### ⚡ `quickdraw.yml` — Quickdraw
-
-| Detail | Value |
-|---|---|
-| **Badge earned** | Quickdraw |
-| **Trigger** | Manual only |
-| **What it does** | Opens an issue and closes it within seconds |
-
-> ✅ Run this **once** manually. After that you have the badge permanently.
-
-### 🔗 `pair-extraordinaire.yml` — Pair Extraordinaire
-
-| Detail | Value |
-|---|---|
-| **Badge earned** | Pair Extraordinaire |
-| **Trigger** | Manual only |
-| **What it does** | Creates a co-authored commit → opens + merges a PR |
-
-> ⚠️ **Before running:** Edit the workflow file and replace `FRIEND_GITHUB_USERNAME` and `FRIEND_GITHUB_EMAIL` with real values. Use the format `username@users.noreply.github.com`.
-
----
-
-## 🎯 Badge Progress Tracker
-
-| Badge | How to Trigger | Times Needed |
+| Badge | Tier | Status |
 |---|---|---|
-| ⚡ **Quickdraw** | Run `quickdraw.yml` once manually | 1 |
-| 🦈 **Pull Shark** Bronze | Run `pull-shark.yml` × 2 | 2 PRs merged |
-| 🦈 **Pull Shark** Silver | Run `pull-shark.yml` × 16 | 16 PRs merged |
-| 🦈 **Pull Shark** Gold | Run `pull-shark.yml` × 128 | 128 PRs merged |
-| 🤙 **YOLO** | Automatic with every `pull-shark.yml` run | 1 |
-| 🔗 **Pair Extraordinaire** Bronze | Run `pair-extraordinaire.yml` × 1 | 1 co-authored PR |
-| 🔗 **Pair Extraordinaire** Silver | Run `pair-extraordinaire.yml` × 10 | 10 co-authored PRs |
+| ⚡ **Quickdraw** | One-time | Auto-triggered |
+| 🦈 **Pull Shark** | Bronze→Gold | Runs every hour |
+| 🤙 **YOLO** | One-time | Auto with Pull Shark |
+| 🔗 **Pair Extraordinaire** | Bronze→Gold | Manual trigger |
+| 🧠 **Galaxy Brain** | Bronze→Gold | Semi-manual helper |
 
 ---
 
-## 🚀 Quick Start Checklist
+## ⚡ Setup (5 minutes)
 
-- [ ] 1. Create public repo `badge-hunter`
-- [ ] 2. Enable Actions → Read & write permissions + Allow PRs
-- [ ] 3. Push this project to the repo
-- [ ] 4. Go to Actions tab → Run **"Quickdraw"** manually (1 time)
-- [ ] 5. Go to Actions tab → Run **"Pull Shark + YOLO"** manually (as many times as you want)
-- [ ] 6. Edit `pair-extraordinaire.yml` with your co-author details → Run it
-- [ ] 7. Check your GitHub profile page for new badges 🎉
+### Step 1 — Create the repo
+
+1. Go to [github.com/new](https://github.com/new)
+2. Name: `badge-bot` | Visibility: **Public**
+3. ✅ Add a README
+4. Create repository
+
+### Step 2 — Enable Actions permissions
+
+`Settings` → `Actions` → `General` → `Workflow permissions`
+- ✅ **Read and write permissions**
+- ✅ **Allow GitHub Actions to create and approve pull requests**
+- Save
+
+### Step 3 — Add all workflow files
+
+Upload or create these files in `.github/workflows/`:
+
+```
+.github/workflows/
+├── badge-bot.yml           ← master orchestrator (hourly)
+├── pull-shark.yml          ← Pull Shark + YOLO
+├── quickdraw.yml           ← Quickdraw
+├── pair-extraordinaire.yml ← Pair Extraordinaire
+├── galaxy-brain.yml        ← Galaxy Brain helper
+└── starstruck.yml          ← keeps repo fresh for stars
+```
+
+### Step 4 — Run it!
+
+Go to **Actions** tab → select **"Badge Bot Master"** → click **"Run workflow"**
+
+That's it. The bot will now run every hour automatically.
 
 ---
 
-## 💡 Pro Tips
+## 📊 Pull Shark Progress
 
-- Badges can take **a few minutes to a few hours** to appear on your profile after the action completes.
-- For **Pair Extraordinaire**, use `yourusername@users.noreply.github.com` as the email format.
-- The `pull-shark.yml` schedule runs every 6 hours automatically — leave it and collect badges passively.
-- Check your badges at: `https://github.com/YOUR_USERNAME`
+| Tier | PRs Needed | Time at 1/hr |
+|---|---|---|
+| 🥉 Bronze | 2 | ~2 hours |
+| 🥈 Silver | 16 | ~16 hours |
+| 🥇 Gold | 128 | ~5 days |
 
 ---
 
-*Made for badge hunting on GitHub · Good luck Diganta! 🏆*
+## 🔗 Pair Extraordinaire Setup
+
+1. Go to Actions → **Pair Extraordinaire Hunter** → Run workflow
+2. Enter your co-author's GitHub username
+3. Email format: `username@users.noreply.github.com`
+
+Or edit `pair-extraordinaire.yml` to hardcode your co-author's details.
+
+---
+
+## 🧠 Galaxy Brain Setup
+
+1. Find a repo with a **Discussions** tab
+2. Answer an open question well
+3. Ask the repo owner to mark it as the accepted answer
+4. Alternatively: use the `galaxy-brain.yml` workflow to post answers programmatically
+
+---
+
+## ⭐ Starstruck Tips
+
+The bot auto-updates your README daily to keep the repo fresh. To get stars:
+- Share on **Reddit** ([r/coolgithubprojects](https://reddit.com/r/coolgithubprojects), [r/github](https://reddit.com/r/github))
+- Post on **dev.to** or **Hashnode**
+- Share on **Twitter/X** with #github #opensource
+
+---
+
+*Last updated: auto*

@@ -1,0 +1,68 @@
+name: Starstruck Helper
+
+on:
+  schedule:
+    - cron: '30 6 * * *'    # daily at 6:30 UTC
+  workflow_dispatch:          # manual trigger
+
+# ⚠️ Starstruck requires OTHER people to star your repo.
+# This workflow keeps your repo active and fresh to attract stars.
+
+jobs:
+  keep-fresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull origin main --rebase || true
+
+      - name: Update README timestamp
+        run: |
+          # Update the "Last updated" line in README
+          if grep -q "Last updated:" README.md; then
+            sed -i "s|*Last updated:.*|*Last updated: $(date -u +%Y-%m-%d) · Badge Bot is running 🤖*|" README.md
+          fi
+          git add README.md
+          git diff --cached --quiet || git commit -m "chore: daily refresh $(date -u +%Y-%m-%d)"
+          git push origin main || true
+
+      - name: Log star campaign
+        run: |
+          mkdir -p logs
+          STARS=$(gh api repos/${{ github.repository }} --jq '.stargazers_count' 2>/dev/null || echo "?")
+          echo "⭐ Starstruck check at $(date -u) | Stars: $STARS" >> logs/starstruck-log.txt
+          git add logs/starstruck-log.txt
+          git diff --cached --quiet || git commit -m "chore: star count update — $STARS stars"
+          git push origin main || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Star progress report
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          STARS=$(gh api repos/${{ github.repository }} --jq '.stargazers_count' 2>/dev/null || echo "0")
+          echo "╔══════════════════════════════════════╗"
+          echo "║     ⭐ Starstruck Progress            ║"
+          echo "╠══════════════════════════════════════╣"
+          echo "║ Current stars: $STARS"
+          echo "║ 🥉 Bronze:     16 stars needed"
+          echo "║ 🥈 Silver:     128 stars needed"
+          echo "║ 🥇 Gold:       512 stars needed"
+          echo "╚══════════════════════════════════════╝"
+          echo ""
+          echo "💡 Share your repo to get stars:"
+          echo "  → https://reddit.com/r/coolgithubprojects"
+          echo "  → https://reddit.com/r/github"
+          echo "  → dev.to / hashnode"
+          echo "  → Twitter/X with #github #opensource"

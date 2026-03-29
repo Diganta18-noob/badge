@@ -1,7 +1,8 @@
-name: Quickdraw
+name: Quickdraw Hunter
 
 on:
-  workflow_dispatch:   # run manually once — you only need Quickdraw once
+  workflow_dispatch:          # manual trigger
+  workflow_call:              # callable by master bot
 
 jobs:
   quickdraw:
@@ -10,19 +11,38 @@ jobs:
       issues: write
 
     steps:
+      - name: Check if Quickdraw was already attempted
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          COUNT=$(gh issue list --repo "$REPO" --search "Quickdraw badge" --state all --limit 1 --json number | jq length)
+          if [ "$COUNT" -gt "0" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "⚡ Quickdraw already attempted — skipping"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Open an issue
+        if: steps.check.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           ISSUE_URL=$(gh issue create \
             --repo "$REPO" \
-            --title "Quickdraw badge 🤠" \
-            --body "Opening and closing immediately for the Quickdraw achievement.")
+            --title "⚡ Quickdraw badge 🤠 $(date -u +%Y-%m-%d)" \
+            --body "Opening and closing immediately for the Quickdraw achievement.
+
+          ⏱️ Opened at: $(date -u)
+          🤖 Automated by Badge Bot")
           echo "ISSUE_URL=$ISSUE_URL" >> $GITHUB_ENV
 
       - name: Close the issue immediately
+        if: steps.check.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh issue close "$ISSUE_URL" --comment "Closed for Quickdraw badge 🏆"
+          gh issue close "$ISSUE_URL" --comment "⚡ Closed instantly for Quickdraw badge 🏆 — $(date -u)"

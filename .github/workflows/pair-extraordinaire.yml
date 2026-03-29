@@ -1,7 +1,24 @@
-name: Pair Extraordinaire
+name: Pair Extraordinaire Hunter
 
 on:
-  workflow_dispatch:   # trigger manually
+  workflow_dispatch:
+    inputs:
+      coauthor_username:
+        description: 'Co-author GitHub username'
+        required: true
+        default: 'octocat'
+      coauthor_email:
+        description: 'Co-author email (use username@users.noreply.github.com)'
+        required: true
+        default: 'octocat@users.noreply.github.com'
+  workflow_call:
+    inputs:
+      coauthor_username:
+        type: string
+        default: 'octocat'
+      coauthor_email:
+        type: string
+        default: 'octocat@users.noreply.github.com'
 
 jobs:
   pair-commit:
@@ -13,32 +30,57 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Create co-authored commit
-        run: |
-          BRANCH="pair-$(date +%s)"
-          git checkout -b "$BRANCH"
-          echo "Pair session at $(date -u)" >> logs/pair-log.txt
-          git add logs/pair-log.txt
-          # Replace below with a real GitHub friend's username and email
-          git commit -m "chore: pair session $(date -u)
+      - name: Pull latest main
+        run: git pull origin main --rebase || true
 
-          Co-authored-by: FRIEND_GITHUB_USERNAME <FRIEND_GITHUB_EMAIL>"
+      - name: Create co-authored commit
+        env:
+          COAUTHOR_USER: ${{ inputs.coauthor_username }}
+          COAUTHOR_EMAIL: ${{ inputs.coauthor_email }}
+        run: |
+          BRANCH="pair-$(date +%s)-$RANDOM"
+          git checkout -b "$BRANCH"
+          mkdir -p logs
+          echo "🔗 Pair session at $(date -u) with $COAUTHOR_USER" >> logs/pair-log.txt
+          git add logs/pair-log.txt
+          git commit -m "chore: pair session $(date -u +%Y-%m-%dT%H:%M:%S)
+
+          Co-authored-by: $COAUTHOR_USER <$COAUTHOR_EMAIL>"
           git push origin "$BRANCH"
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
 
       - name: Open and merge PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COAUTHOR_USER: ${{ inputs.coauthor_username }}
         run: |
           PR_URL=$(gh pr create \
-            --title "chore: pair session $(date -u)" \
-            --body "Co-authored PR for Pair Extraordinaire badge 🏆" \
+            --title "🔗 Pair session with $COAUTHOR_USER" \
+            --body "Co-authored PR for Pair Extraordinaire badge 🏆
+
+          **Co-author:** @$COAUTHOR_USER
+          **Time:** $(date -u)
+          🤖 Automated by Badge Bot" \
             --base main \
             --head "$BRANCH")
-          gh pr merge "$PR_URL" --merge --admin
+          sleep 5
+          for i in 1 2 3 4 5; do
+            gh pr merge "$PR_URL" --merge --admin && break
+            echo "Merge attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+
+      - name: Cleanup — delete merged branch
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git push origin --delete "$BRANCH" || true
