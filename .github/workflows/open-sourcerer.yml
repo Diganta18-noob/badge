@@ -84,7 +84,9 @@ jobs:
           - [ ] PR to repo 3: ___
 
           ---
-          *🤖 Badge Bot*"
+          *🤖 Badge Bot*" || {
+              echo "::warning::Failed to create issue! Please ensure 'Allow GitHub Actions to create and approve pull requests' is checked in Settings -> Actions -> General."
+            }
           fi
 
       - name: Log progress
