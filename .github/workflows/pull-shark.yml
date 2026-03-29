@@ -51,6 +51,7 @@ jobs:
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
 
       - name: Create PR
+        id: pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -61,7 +62,10 @@ jobs:
           **Progress:** ${{ steps.count.outputs.merged }} → $NEXT PRs merged
           🤖 Badge Bot | $(date -u)" \
             --base main \
-            --head "$BRANCH")
+            --head "$BRANCH") || {
+              echo "::error::Failed to create PR! Please go to Settings -> Actions -> General and check 'Allow GitHub Actions to create and approve pull requests'."
+              exit 1
+            }
           echo "PR_URL=$PR_URL" >> $GITHUB_ENV
 
       - name: Wait & Merge (YOLO — no review)
@@ -106,23 +110,4 @@ jobs:
             -d text="🎉 *BADGE TIER UNLOCKED!*%0A${{ steps.tier.outputs.unlocked }}%0A%0A🦈 Total PRs: $((${{ steps.count.outputs.merged }} + 1))" \
             -d parse_mode="Markdown" || true
 
-      - name: Notify Telegram — progress
-        if: env.TELEGRAM_BOT_TOKEN != ''
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          NEXT=$((${{ steps.count.outputs.merged }} + 1))
-          if [ "$NEXT" -lt 2 ]; then
-            TARGET=2; TIER="Bronze"
-          elif [ "$NEXT" -lt 16 ]; then
-            TARGET=16; TIER="Silver"
-          elif [ "$NEXT" -lt 128 ]; then
-            TARGET=128; TIER="Gold"
-          else
-            TARGET=128; TIER="MAX 🏆"
-          fi
-          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
-            -d chat_id="$TELEGRAM_CHAT_ID" \
-            -d text="🦈 Pull Shark: $NEXT/$TARGET PRs → $TIER" \
-            -d parse_mode="Markdown" || true
+

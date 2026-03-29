@@ -2,7 +2,7 @@ name: "🤖 Badge Bot Master"
 
 on:
   schedule:
-    - cron: '0 * * * *'     # every hour
+    - cron: '0 12 * * *'     # daily at 12:00 UTC
   workflow_dispatch:
     inputs:
       run_all:
@@ -82,6 +82,7 @@ jobs:
     uses: ./.github/workflows/open-sourcerer.yml
     permissions:
       contents: write
+      issues: write
     secrets: inherit
 
   # ──────────────────────────────────────────────
