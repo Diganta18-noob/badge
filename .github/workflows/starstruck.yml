@@ -1,15 +1,16 @@
-name: Starstruck Helper
+name: "⭐ Starstruck Hunter"
 
 on:
   schedule:
     - cron: '30 6 * * *'    # daily at 6:30 UTC
-  workflow_dispatch:          # manual trigger
+  workflow_dispatch:
 
-# ⚠️ Starstruck requires OTHER people to star your repo.
-# This workflow keeps your repo active and fresh to attract stars.
+# Starstruck: Get stars on your repo
+# Bronze: 16, Silver: 128, Gold: 512, Platinum: 4096
+# This workflow keeps the repo fresh and tracks star progress
 
 jobs:
-  keep-fresh:
+  starstruck:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -26,43 +27,68 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git pull origin main --rebase || true
 
-      - name: Update README timestamp
-        run: |
-          # Update the "Last updated" line in README
-          if grep -q "Last updated:" README.md; then
-            sed -i "s|*Last updated:.*|*Last updated: $(date -u +%Y-%m-%d) · Badge Bot is running 🤖*|" README.md
-          fi
-          git add README.md
-          git diff --cached --quiet || git commit -m "chore: daily refresh $(date -u +%Y-%m-%d)"
-          git push origin main || true
-
-      - name: Log star campaign
-        run: |
-          mkdir -p logs
-          STARS=$(gh api repos/${{ github.repository }} --jq '.stargazers_count' 2>/dev/null || echo "?")
-          echo "⭐ Starstruck check at $(date -u) | Stars: $STARS" >> logs/starstruck-log.txt
-          git add logs/starstruck-log.txt
-          git diff --cached --quiet || git commit -m "chore: star count update — $STARS stars"
-          git push origin main || true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Star progress report
+      - name: Get star count
+        id: stars
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           STARS=$(gh api repos/${{ github.repository }} --jq '.stargazers_count' 2>/dev/null || echo "0")
-          echo "╔══════════════════════════════════════╗"
-          echo "║     ⭐ Starstruck Progress            ║"
-          echo "╠══════════════════════════════════════╣"
-          echo "║ Current stars: $STARS"
-          echo "║ 🥉 Bronze:     16 stars needed"
-          echo "║ 🥈 Silver:     128 stars needed"
-          echo "║ 🥇 Gold:       512 stars needed"
-          echo "╚══════════════════════════════════════╝"
-          echo ""
-          echo "💡 Share your repo to get stars:"
-          echo "  → https://reddit.com/r/coolgithubprojects"
-          echo "  → https://reddit.com/r/github"
-          echo "  → dev.to / hashnode"
-          echo "  → Twitter/X with #github #opensource"
+          echo "count=$STARS" >> $GITHUB_OUTPUT
+          echo "⭐ Current stars: $STARS"
+
+          # Determine tier
+          if [ "$STARS" -ge 4096 ]; then
+            echo "tier=💎 PLATINUM" >> $GITHUB_OUTPUT
+            echo "next=MAX" >> $GITHUB_OUTPUT
+          elif [ "$STARS" -ge 512 ]; then
+            echo "tier=🥇 GOLD" >> $GITHUB_OUTPUT
+            echo "next=4096" >> $GITHUB_OUTPUT
+          elif [ "$STARS" -ge 128 ]; then
+            echo "tier=🥈 SILVER" >> $GITHUB_OUTPUT
+            echo "next=512" >> $GITHUB_OUTPUT
+          elif [ "$STARS" -ge 16 ]; then
+            echo "tier=🥉 BRONZE" >> $GITHUB_OUTPUT
+            echo "next=128" >> $GITHUB_OUTPUT
+          else
+            echo "tier=⏳ Not yet" >> $GITHUB_OUTPUT
+            echo "next=16" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update README timestamp
+        run: |
+          if grep -q "Last updated:" README.md; then
+            sed -i "s|*Last updated:.*|*Last updated: $(date -u +%Y-%m-%d) · ⭐ ${{ steps.stars.outputs.count }} stars · Badge Bot 🤖*|" README.md
+          fi
+          git add README.md
+          git diff --cached --quiet || {
+            git commit -m "chore: daily refresh — ${{ steps.stars.outputs.count }} stars ⭐"
+            git push origin main || true
+          }
+
+      - name: Log star progress
+        run: |
+          mkdir -p logs
+          echo "⭐ Stars: ${{ steps.stars.outputs.count }} | Tier: ${{ steps.stars.outputs.tier }} | $(date -u)" >> logs/starstruck-log.txt
+          git add logs/starstruck-log.txt
+          git diff --cached --quiet || {
+            git commit -m "chore: star log — ${{ steps.stars.outputs.count }} stars"
+            git push origin main || true
+          }
+
+      - name: Telegram star update
+        if: env.TELEGRAM_BOT_TOKEN != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          MSG="⭐ *Starstruck Progress*%0A"
+          MSG+="━━━━━━━━━━━━━━━━━━━━━━%0A"
+          MSG+="Stars: ${{ steps.stars.outputs.count }}%0A"
+          MSG+="Tier: ${{ steps.stars.outputs.tier }}%0A"
+          MSG+="Next: ${{ steps.stars.outputs.next }} stars%0A"
+          MSG+="━━━━━━━━━━━━━━━━━━━━━━%0A"
+          MSG+="💡 Share your repo to get stars!"
+          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d chat_id="$TELEGRAM_CHAT_ID" \
+            -d text="$MSG" \
+            -d parse_mode="Markdown" || true

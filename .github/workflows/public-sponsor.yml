@@ -1,0 +1,89 @@
+name: "💖 Public Sponsor Hunter"
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 9 * * 1'     # weekly on Monday at 9 UTC
+
+# Public Sponsor: Sponsor an open source developer publicly
+# This is a ONE-TIME manual action — costs as little as $1/month
+# This workflow sends reminders and provides direct links
+
+jobs:
+  sponsor-reminder:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull origin main --rebase || true
+
+      - name: Create sponsor guide issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          COUNT=$(gh issue list --repo "$REPO" --search "Public Sponsor Guide" --state open --limit 1 --json number | jq length)
+          if [ "$COUNT" -eq "0" ]; then
+            gh issue create \
+              --repo "$REPO" \
+              --title "💖 Public Sponsor Guide" \
+              --body "## How to earn Public Sponsor badge
+
+          **Sponsor any open source developer on GitHub — as little as \$1/month.**
+
+          ### Quick Steps:
+          1. Go to [GitHub Sponsors Explore](https://github.com/sponsors/explore)
+          2. Pick anyone you like (e.g., a tool you use)
+          3. Click **Sponsor** → choose \$1/month
+          4. ✅ Make sure **'Show my sponsorship publicly'** is checked
+          5. Complete the sponsorship
+
+          ### Popular choices (\$1/month):
+          - [sindresorhus](https://github.com/sponsors/sindresorhus) — awesome-lists creator
+          - [antfu](https://github.com/sponsors/antfu) — Vue/Vite ecosystem
+          - [pi0](https://github.com/sponsors/pi0) — Nuxt/Nitro creator
+          - [Rich-Harris](https://github.com/sponsors/Rich-Harris) — Svelte creator
+
+          ### What you get:
+          - 💖 **Public Sponsor** badge on your profile
+          - Good karma for supporting open source 🙏
+
+          ---
+          *🤖 Badge Bot — You can cancel the sponsorship after earning the badge if needed*"
+          fi
+
+      - name: Log reminder
+        run: |
+          mkdir -p logs
+          echo "💖 Sponsor reminder at $(date -u)" >> logs/sponsor-log.txt
+          git add logs/sponsor-log.txt
+          git diff --cached --quiet || {
+            git commit -m "chore: sponsor reminder $(date -u +%Y-%m-%d)"
+            git push origin main || true
+          }
+
+      - name: Telegram reminder
+        if: env.TELEGRAM_BOT_TOKEN != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          MSG="💖 *Public Sponsor Reminder*%0A%0A"
+          MSG+="Sponsor someone for \$1/month to earn the badge!%0A"
+          MSG+="🔗 [GitHub Sponsors](https://github.com/sponsors/explore)%0A%0A"
+          MSG+="Make sure 'Show publicly' is checked ✅"
+          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d chat_id="$TELEGRAM_CHAT_ID" \
+            -d text="$MSG" \
+            -d parse_mode="Markdown" \
+            -d disable_web_page_preview=true || true

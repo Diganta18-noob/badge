@@ -1,33 +1,26 @@
-name: Galaxy Brain Helper
+name: "🧠 Galaxy Brain Hunter"
 
 on:
+  schedule:
+    - cron: '0 12 * * *'    # daily at noon UTC
   workflow_dispatch:
     inputs:
-      target_repo:
-        description: 'Repo to post discussion answer (owner/repo)'
-        required: false
-        default: ''
-      discussion_number:
-        description: 'Discussion number to answer'
-        required: false
-        default: ''
-      answer_body:
-        description: 'Your answer text'
-        required: false
-        default: ''
+      enable_discussions:
+        description: 'Create a Discussion for others to answer'
+        type: boolean
+        default: true
 
-# ⚠️ Galaxy Brain requires REAL human interaction:
-#   1. Someone posts a Discussion question
-#   2. You answer it
-#   3. The question author marks YOUR answer as "Accepted"
-#
-# This workflow helps by:
-#   - Creating a Discussion in YOUR repo (if you have Discussions enabled)
-#   - Reminding you to go answer Discussions on other repos
-#   - Logging your Galaxy Brain progress
+# Galaxy Brain: Get your Discussion answer marked as "Accepted"
+# Bronze: 1, Silver: 10, Gold: 25
+# ⚠️ This badge REQUIRES real human interaction — someone must
+#    mark your answer as accepted. This workflow helps by:
+#    1. Enabling Discussions on the repo
+#    2. Creating discoverable Discussion questions
+#    3. Tracking your progress
+#    4. Sending Telegram reminders
 
 jobs:
-  galaxy-brain-helper:
+  galaxy-brain:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -39,18 +32,50 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup
+      - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git pull origin main --rebase || true
 
-      - name: Create Galaxy Brain tracking issue
+      - name: Enable Discussions via API
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
-          # Check if we've already created a tracking issue
+          # Try to enable discussions (requires repo admin)
+          gh api repos/$REPO \
+            --method PATCH \
+            -f has_discussions=true 2>/dev/null || echo "Could not enable Discussions — enable manually in Settings"
+
+      - name: Create helpful Discussion question
+        if: inputs.enable_discussions == true || inputs.enable_discussions == ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Create a Q&A discussion that others can answer
+          TOPICS=("How to automate GitHub badges?" "Best GitHub Actions tips?" "How to get more stars on repos?" "Favorite GitHub features in 2025?" "Tips for open source contributions?")
+          TOPIC=${TOPICS[$((RANDOM % ${#TOPICS[@]}))]}
+          
+          gh api graphql -f query='
+            mutation {
+              createDiscussion(input: {
+                repositoryId: "'$(gh api repos/$REPO --jq '.node_id')'"
+                categoryId: "'$(gh api repos/$REPO/discussions/categories --jq '.[0].node_id // empty' 2>/dev/null || echo "")'"
+                title: "'"$TOPIC"'"
+                body: "Share your tips and experiences! 🧠\n\n_Created by Badge Bot — answer this to help earn Galaxy Brain badges!_"
+              }) {
+                discussion { url }
+              }
+            }
+          ' 2>/dev/null || echo "⚠️ Could not create Discussion — ensure Discussions are enabled with Q&A category"
+
+      - name: Create tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
           COUNT=$(gh issue list --repo "$REPO" --search "Galaxy Brain Tracker" --state open --limit 1 --json number | jq length)
           if [ "$COUNT" -eq "0" ]; then
             gh issue create \
@@ -58,39 +83,47 @@ jobs:
               --title "🧠 Galaxy Brain Tracker" \
               --body "## How to earn Galaxy Brain
 
-          The Galaxy Brain badge **cannot be fully automated** — it requires real community interaction.
+          **This badge requires real community interaction.**
 
-          ### Steps:
-          1. **Enable Discussions** on this repo: Settings → General → Features → ✅ Discussions
-          2. **Find repos** with open Discussion questions:
-             - [GitHub Discussions search](https://github.com/search?q=is%3Aopen+type%3Adiscussions&type=discussions)
-             - Filter by language/topic you know well
-          3. **Post a helpful answer** to a question
-          4. **Wait for the author** to mark your answer as ✅ Accepted
+          ### Strategy:
+          1. Find repos with open Discussion questions:
+             → [GitHub Discussions Search](https://github.com/search?q=is%3Aopen+is%3Aunanswered+type%3Adiscussions&type=discussions)
+          2. Post a thorough, helpful answer
+          3. Wait for the author to mark it as ✅ Accepted
 
-          ### Progress:
-          | Tier | Accepted Answers Needed |
+          ### Tiers:
+          | Tier | Accepted Answers |
           |---|---|
-          | 🥉 Bronze | 2 |
-          | 🥈 Silver | 8 |
-          | 🥇 Gold | 16 |
-
-          ### Tips:
-          - Answer questions in **popular repos** for better chances
-          - Be thorough and helpful — authors are more likely to accept detailed answers
-          - Focus on repos where you're already knowledgeable
+          | 🥉 Bronze | 1 |
+          | 🥈 Silver | 10 |
+          | 🥇 Gold | 25 |
 
           ---
-          *🤖 Created by Badge Bot*"
-            echo "✅ Created Galaxy Brain tracking issue"
-          else
-            echo "ℹ️ Tracking issue already exists"
+          *🤖 Badge Bot*"
           fi
 
-      - name: Log Galaxy Brain attempt
+      - name: Log progress
         run: |
           mkdir -p logs
-          echo "🧠 Galaxy Brain helper run at $(date -u) | Run #$GITHUB_RUN_NUMBER" >> logs/galaxy-brain-log.txt
+          echo "🧠 Galaxy Brain check at $(date -u)" >> logs/galaxy-brain-log.txt
           git add logs/galaxy-brain-log.txt
-          git commit -m "chore: galaxy brain helper $(date -u +%Y-%m-%dT%H:%M:%S)" || echo "Nothing to commit"
-          git push origin main || true
+          git diff --cached --quiet || {
+            git commit -m "chore: galaxy brain check $(date -u +%Y-%m-%d)"
+            git push origin main || true
+          }
+
+      - name: Telegram reminder
+        if: env.TELEGRAM_BOT_TOKEN != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          MSG="🧠 *Galaxy Brain Reminder*%0A%0A"
+          MSG+="Go answer Discussion questions!%0A"
+          MSG+="🔗 [Search unanswered Discussions](https://github.com/search?q=is%3Aopen+is%3Aunanswered+type%3Adiscussions&type=discussions)%0A%0A"
+          MSG+="Need: 1 accepted answer for Bronze"
+          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d chat_id="$TELEGRAM_CHAT_ID" \
+            -d text="$MSG" \
+            -d parse_mode="Markdown" \
+            -d disable_web_page_preview=true || true

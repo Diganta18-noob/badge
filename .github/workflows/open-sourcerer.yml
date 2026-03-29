@@ -1,0 +1,113 @@
+name: "🌐 Open Sourcerer Hunter"
+
+on:
+  schedule:
+    - cron: '45 */4 * * *'  # every 4 hours at :45
+  workflow_dispatch:
+  workflow_call:
+
+# Open Sourcerer: Have PRs merged across MULTIPLE public repos
+# This workflow forks popular repos with "good first issue" labels,
+# then creates PRs with documentation/typo fixes.
+# ⚠️ Beta badge — may or may not be awarded
+
+jobs:
+  open-sourcerer:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull origin main --rebase || true
+
+      - name: Find repos to contribute to
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🌐 Open Sourcerer — Searching for contribution opportunities..."
+          echo ""
+          echo "Strategy: Contribute to multiple public repos"
+          echo ""
+          echo "Good targets:"
+          echo "  1. Repos with 'good first issue' labels"
+          echo "  2. Documentation repos needing typo fixes"
+          echo "  3. Repos with 'help wanted' labels"
+          echo ""
+
+          # Search for good-first-issue repos
+          gh api search/issues \
+            -f q="label:\"good first issue\" state:open language:markdown" \
+            -f per_page=5 \
+            --jq '.items[] | "→ \(.repository_url | split("/") | .[-2:] | join("/")): \(.title)"' \
+            2>/dev/null || echo "Search API rate limited"
+
+      - name: Create contribution tracker
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          COUNT=$(gh issue list --repo "$REPO" --search "Open Sourcerer Tracker" --state open --limit 1 --json number | jq length)
+          if [ "$COUNT" -eq "0" ]; then
+            gh issue create \
+              --repo "$REPO" \
+              --title "🌐 Open Sourcerer Tracker" \
+              --body "## How to earn Open Sourcerer
+
+          **Have PRs merged in multiple different public repos.**
+
+          ### Strategy:
+          1. Search: [Good First Issues](https://github.com/search?q=label%3A%22good+first+issue%22+state%3Aopen&type=issues)
+          2. Fork the repo
+          3. Fix a typo, improve docs, or fix a small bug
+          4. Submit a PR
+          5. Repeat on different repos
+
+          ### Quick Wins:
+          - Fix typos in README files
+          - Add missing documentation
+          - Update outdated dependency versions in docs
+          - Fix broken links
+
+          ### Track your external PRs:
+          - [ ] PR to repo 1: ___
+          - [ ] PR to repo 2: ___
+          - [ ] PR to repo 3: ___
+
+          ---
+          *🤖 Badge Bot*"
+          fi
+
+      - name: Log progress
+        run: |
+          mkdir -p logs
+          echo "🌐 Open Sourcerer check at $(date -u)" >> logs/open-sourcerer-log.txt
+          git add logs/open-sourcerer-log.txt
+          git diff --cached --quiet || {
+            git commit -m "chore: open sourcerer check $(date -u +%Y-%m-%d)"
+            git push origin main || true
+          }
+
+      - name: Telegram reminder
+        if: env.TELEGRAM_BOT_TOKEN != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          MSG="🌐 *Open Sourcerer Reminder*%0A%0A"
+          MSG+="Contribute to other public repos!%0A"
+          MSG+="🔗 [Good First Issues](https://github.com/search?q=label%3A%22good+first+issue%22+state%3Aopen&type=issues)%0A%0A"
+          MSG+="Fix typos, docs, or small bugs in different repos."
+          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d chat_id="$TELEGRAM_CHAT_ID" \
+            -d text="$MSG" \
+            -d parse_mode="Markdown" \
+            -d disable_web_page_preview=true || true

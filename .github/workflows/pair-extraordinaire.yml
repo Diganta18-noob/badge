@@ -1,4 +1,4 @@
-name: Pair Extraordinaire Hunter
+name: "🔗 Pair Extraordinaire Hunter"
 
 on:
   workflow_dispatch:
@@ -8,9 +8,13 @@ on:
         required: true
         default: 'octocat'
       coauthor_email:
-        description: 'Co-author email (use username@users.noreply.github.com)'
+        description: 'Co-author email (username@users.noreply.github.com)'
         required: true
         default: 'octocat@users.noreply.github.com'
+      count:
+        description: 'How many co-authored PRs to create (1-10)'
+        required: false
+        default: '1'
   workflow_call:
     inputs:
       coauthor_username:
@@ -19,6 +23,12 @@ on:
       coauthor_email:
         type: string
         default: 'octocat@users.noreply.github.com'
+      count:
+        type: string
+        default: '1'
+
+# Pair Extraordinaire: Co-author a merged PR
+# Bronze: 1, Silver: 10, Gold: 24
 
 jobs:
   pair-commit:
@@ -26,22 +36,36 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    strategy:
+      max-parallel: 1
+      matrix:
+        run: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
     steps:
-      - name: Checkout repo
+      - name: Check if this run is needed
+        id: should-run
+        run: |
+          if [ "${{ matrix.run }}" -le "${{ inputs.count || '1' }}" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout
+        if: steps.should-run.outputs.run == 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Configure Git
+        if: steps.should-run.outputs.run == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Pull latest main
-        run: git pull origin main --rebase || true
+          git pull origin main --rebase || true
 
       - name: Create co-authored commit
+        if: steps.should-run.outputs.run == 'true'
         env:
           COAUTHOR_USER: ${{ inputs.coauthor_username }}
           COAUTHOR_EMAIL: ${{ inputs.coauthor_email }}
@@ -49,38 +73,46 @@ jobs:
           BRANCH="pair-$(date +%s)-$RANDOM"
           git checkout -b "$BRANCH"
           mkdir -p logs
-          echo "🔗 Pair session at $(date -u) with $COAUTHOR_USER" >> logs/pair-log.txt
+          echo "🔗 Pair #${{ matrix.run }} with $COAUTHOR_USER at $(date -u)" >> logs/pair-log.txt
           git add logs/pair-log.txt
-          git commit -m "chore: pair session $(date -u +%Y-%m-%dT%H:%M:%S)
+          git commit -m "chore: pair session #${{ matrix.run }}
 
           Co-authored-by: $COAUTHOR_USER <$COAUTHOR_EMAIL>"
           git push origin "$BRANCH"
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
 
-      - name: Open and merge PR
+      - name: Create & Merge PR
+        if: steps.should-run.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COAUTHOR_USER: ${{ inputs.coauthor_username }}
         run: |
           PR_URL=$(gh pr create \
-            --title "🔗 Pair session with $COAUTHOR_USER" \
-            --body "Co-authored PR for Pair Extraordinaire badge 🏆
-
+            --title "🔗 Pair with @$COAUTHOR_USER #${{ matrix.run }}" \
+            --body "Co-authored PR for Pair Extraordinaire 🏆
           **Co-author:** @$COAUTHOR_USER
-          **Time:** $(date -u)
-          🤖 Automated by Badge Bot" \
+          🤖 Badge Bot | $(date -u)" \
             --base main \
             --head "$BRANCH")
           sleep 5
           for i in 1 2 3 4 5; do
             gh pr merge "$PR_URL" --merge --admin && break
-            echo "Merge attempt $i failed, retrying in 10s..."
             sleep 10
           done
 
-      - name: Cleanup — delete merged branch
-        if: success()
+      - name: Cleanup
+        if: steps.should-run.outputs.run == 'true' && success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: git push origin --delete "$BRANCH" || true
+
+      - name: Notify Telegram
+        if: steps.should-run.outputs.run == 'true' && env.TELEGRAM_BOT_TOKEN != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          git push origin --delete "$BRANCH" || true
+          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d chat_id="$TELEGRAM_CHAT_ID" \
+            -d text="🔗 Pair Extraordinaire — PR #${{ matrix.run }} merged with @${{ inputs.coauthor_username }}" \
+            -d parse_mode="Markdown" || true

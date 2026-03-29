@@ -1,10 +1,13 @@
-name: Pull Shark + YOLO Hunter
+name: "🦈 Pull Shark + YOLO Hunter"
 
 on:
   schedule:
-    - cron: '15 * * * *'    # runs every hour at :15
-  workflow_dispatch:          # manual trigger
-  workflow_call:              # callable by master bot
+    - cron: '15 * * * *'    # every hour at :15
+  workflow_dispatch:
+  workflow_call:
+
+# Pull Shark: Merge PRs (Bronze:2, Silver:16, Gold:128)
+# YOLO: Merge a PR without review (earned on first run)
 
 jobs:
   auto-pr:
@@ -14,7 +17,7 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -24,51 +27,102 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Pull latest main
+      - name: Pull latest
         run: git pull origin main --rebase || true
 
-      - name: Create branch and commit
-        run: |
-          BRANCH="badge-run-$(date +%s)-$RANDOM"
-          git checkout -b "$BRANCH"
-          mkdir -p logs
-          echo "🦈 Pull Shark run at $(date -u) | run=$GITHUB_RUN_NUMBER" >> logs/badge-log.txt
-          git add logs/badge-log.txt
-          git commit -m "chore: badge hunt $(date -u +%Y-%m-%dT%H:%M:%S)"
-          git push origin "$BRANCH"
-          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
-
-      - name: Create Pull Request
+      - name: Count current PRs
+        id: count
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_URL=$(gh pr create \
-            --title "🦈 Pull Shark run $(date -u +%H:%M)" \
-            --body "Automated PR for Pull Shark + YOLO badges 🏆
+          MERGED=$(gh pr list --state merged --limit 999 --json number | jq length)
+          echo "merged=$MERGED" >> $GITHUB_OUTPUT
+          echo "🦈 Current merged PRs: $MERGED"
 
-          **Run:** #$GITHUB_RUN_NUMBER
-          **Time:** $(date -u)
-          **Branch:** \`$BRANCH\`" \
+      - name: Create branch and commit
+        run: |
+          BRANCH="shark-$(date +%s)-$RANDOM"
+          git checkout -b "$BRANCH"
+          mkdir -p logs
+          echo "🦈 PR #$((${{ steps.count.outputs.merged }} + 1)) at $(date -u)" >> logs/badge-log.txt
+          git add logs/badge-log.txt
+          git commit -m "chore: pull shark hunt $(date -u +%Y-%m-%dT%H:%M:%S)"
+          git push origin "$BRANCH"
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
+
+      - name: Create PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEXT=$((${{ steps.count.outputs.merged }} + 1))
+          PR_URL=$(gh pr create \
+            --title "🦈 Pull Shark #$NEXT" \
+            --body "PR #$NEXT for Pull Shark badge 🏆
+          **Progress:** ${{ steps.count.outputs.merged }} → $NEXT PRs merged
+          🤖 Badge Bot | $(date -u)" \
             --base main \
             --head "$BRANCH")
           echo "PR_URL=$PR_URL" >> $GITHUB_ENV
 
-      - name: Wait for PR to be ready
-        run: sleep 5
-
-      - name: Merge Pull Request (YOLO — no review)
+      - name: Wait & Merge (YOLO — no review)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          sleep 5
           for i in 1 2 3 4 5; do
             gh pr merge "$PR_URL" --merge --admin && break
-            echo "Merge attempt $i failed, retrying in 10s..."
+            echo "Attempt $i failed, retry in 10s..."
             sleep 10
           done
 
-      - name: Cleanup — delete merged branch
+      - name: Cleanup branch
         if: success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: git push origin --delete "$BRANCH" || true
+
+      - name: Check tier unlock
+        id: tier
         run: |
-          git push origin --delete "$BRANCH" || true
+          NEXT=$((${{ steps.count.outputs.merged }} + 1))
+          if [ "$NEXT" -eq 2 ]; then
+            echo "unlocked=🥉 Pull Shark BRONZE unlocked!" >> $GITHUB_OUTPUT
+          elif [ "$NEXT" -eq 16 ]; then
+            echo "unlocked=🥈 Pull Shark SILVER unlocked!" >> $GITHUB_OUTPUT
+          elif [ "$NEXT" -eq 128 ]; then
+            echo "unlocked=🥇 Pull Shark GOLD unlocked!" >> $GITHUB_OUTPUT
+          else
+            echo "unlocked=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Notify Telegram — tier unlock
+        if: steps.tier.outputs.unlocked != '' && env.TELEGRAM_BOT_TOKEN != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d chat_id="$TELEGRAM_CHAT_ID" \
+            -d text="🎉 *BADGE TIER UNLOCKED!*%0A${{ steps.tier.outputs.unlocked }}%0A%0A🦈 Total PRs: $((${{ steps.count.outputs.merged }} + 1))" \
+            -d parse_mode="Markdown" || true
+
+      - name: Notify Telegram — progress
+        if: env.TELEGRAM_BOT_TOKEN != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          NEXT=$((${{ steps.count.outputs.merged }} + 1))
+          if [ "$NEXT" -lt 2 ]; then
+            TARGET=2; TIER="Bronze"
+          elif [ "$NEXT" -lt 16 ]; then
+            TARGET=16; TIER="Silver"
+          elif [ "$NEXT" -lt 128 ]; then
+            TARGET=128; TIER="Gold"
+          else
+            TARGET=128; TIER="MAX 🏆"
+          fi
+          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d chat_id="$TELEGRAM_CHAT_ID" \
+            -d text="🦈 Pull Shark: $NEXT/$TARGET PRs → $TIER" \
+            -d parse_mode="Markdown" || true

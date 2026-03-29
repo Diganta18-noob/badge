@@ -1,0 +1,83 @@
+name: "🏅 Developer Program Hunter"
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 10 * * 1'    # weekly on Monday at 10 UTC
+
+# Developer Program Member: Join the GitHub Developer Program
+# FREE — just sign up at https://developer.github.com/program/
+
+jobs:
+  dev-program:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull origin main --rebase || true
+
+      - name: Create dev program guide
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          COUNT=$(gh issue list --repo "$REPO" --search "Developer Program Guide" --state open --limit 1 --json number | jq length)
+          if [ "$COUNT" -eq "0" ]; then
+            gh issue create \
+              --repo "$REPO" \
+              --title "🏅 Developer Program Guide" \
+              --body "## How to earn Developer Program Member badge
+
+          **100% FREE — takes 2 minutes.**
+
+          ### Steps:
+          1. Go to [developer.github.com/program](https://developer.github.com/program/)
+          2. Click **Register**
+          3. Sign in with your GitHub account
+          4. Accept the terms
+          5. Done! Badge appears on your profile.
+
+          ### What you get:
+          - 🏅 **Developer Program Member** badge
+          - Access to GitHub API documentation
+          - Developer tools and resources
+
+          ---
+          *🤖 Badge Bot*"
+          fi
+
+      - name: Log
+        run: |
+          mkdir -p logs
+          echo "🏅 Dev Program reminder at $(date -u)" >> logs/dev-program-log.txt
+          git add logs/dev-program-log.txt
+          git diff --cached --quiet || {
+            git commit -m "chore: dev program reminder $(date -u +%Y-%m-%d)"
+            git push origin main || true
+          }
+
+      - name: Telegram reminder
+        if: env.TELEGRAM_BOT_TOKEN != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          MSG="🏅 *Developer Program Reminder*%0A%0A"
+          MSG+="Join for FREE to earn the badge!%0A"
+          MSG+="🔗 [Register Now](https://developer.github.com/program/)%0A%0A"
+          MSG+="Takes 2 minutes ⏱️"
+          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d chat_id="$TELEGRAM_CHAT_ID" \
+            -d text="$MSG" \
+            -d parse_mode="Markdown" \
+            -d disable_web_page_preview=true || true

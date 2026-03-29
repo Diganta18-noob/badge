@@ -1,0 +1,63 @@
+name: "❤️ Heart On Your Sleeve Hunter"
+
+on:
+  schedule:
+    - cron: '0 8 * * *'     # daily at 8 UTC
+  workflow_dispatch:
+
+# Heart On Your Sleeve: React with ❤️ emoji on GitHub
+# ⚠️ This badge is in BETA — may not be consistently awarded
+# This workflow reacts to issues/PRs/commits with ❤️
+
+jobs:
+  heart:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: React with ❤️ to recent items
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "❤️ Heart On Your Sleeve — reacting to content..."
+
+          # React to recent issues
+          echo "Reacting to issues..."
+          gh api repos/$REPO/issues --jq '.[0:3] | .[].number' 2>/dev/null | while read NUM; do
+            gh api repos/$REPO/issues/$NUM/reactions \
+              --method POST \
+              -f content="heart" 2>/dev/null || echo "Already reacted to issue #$NUM"
+          done
+
+          # React to recent PRs
+          echo "Reacting to PRs..."
+          gh api repos/$REPO/pulls --jq '.[0:3] | .[].number' 2>/dev/null | while read NUM; do
+            gh api repos/$REPO/issues/$NUM/reactions \
+              --method POST \
+              -f content="heart" 2>/dev/null || echo "Already reacted to PR #$NUM"
+          done
+
+          # React to recent comments
+          echo "Reacting to comments..."
+          gh api repos/$REPO/issues/comments --jq '.[0:3] | .[].id' 2>/dev/null | while read ID; do
+            gh api repos/$REPO/issues/comments/$ID/reactions \
+              --method POST \
+              -f content="heart" 2>/dev/null || echo "Already reacted to comment $ID"
+          done
+
+          echo "❤️ Done reacting!"
+
+      - name: Telegram update
+        if: env.TELEGRAM_BOT_TOKEN != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d chat_id="$TELEGRAM_CHAT_ID" \
+            -d text="❤️ Heart On Your Sleeve — reacted to issues, PRs & comments with ❤️%0A_(Beta badge — may take time to appear)_" \
+            -d parse_mode="Markdown" || true

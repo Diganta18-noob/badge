@@ -1,8 +1,11 @@
-name: Quickdraw Hunter
+name: "⚡ Quickdraw Hunter"
 
 on:
-  workflow_dispatch:          # manual trigger
-  workflow_call:              # callable by master bot
+  workflow_dispatch:
+  workflow_call:
+
+# Quickdraw: Close an issue within 5 minutes of opening it
+# Only needs to happen ONCE — this workflow auto-skips after first success
 
 jobs:
   quickdraw:
@@ -11,13 +14,13 @@ jobs:
       issues: write
 
     steps:
-      - name: Check if Quickdraw was already attempted
+      - name: Check if already earned
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
-          COUNT=$(gh issue list --repo "$REPO" --search "Quickdraw badge" --state all --limit 1 --json number | jq length)
+          COUNT=$(gh issue list --repo "$REPO" --search "Quickdraw" --state all --limit 1 --json number | jq length)
           if [ "$COUNT" -gt "0" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
             echo "⚡ Quickdraw already attempted — skipping"
@@ -25,7 +28,7 @@ jobs:
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Open an issue
+      - name: Open issue
         if: steps.check.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -33,16 +36,25 @@ jobs:
         run: |
           ISSUE_URL=$(gh issue create \
             --repo "$REPO" \
-            --title "⚡ Quickdraw badge 🤠 $(date -u +%Y-%m-%d)" \
-            --body "Opening and closing immediately for the Quickdraw achievement.
-
-          ⏱️ Opened at: $(date -u)
-          🤖 Automated by Badge Bot")
+            --title "⚡ Quickdraw badge 🤠" \
+            --body "Opening and closing instantly for Quickdraw.
+          ⏱️ $(date -u) | 🤖 Badge Bot")
           echo "ISSUE_URL=$ISSUE_URL" >> $GITHUB_ENV
 
-      - name: Close the issue immediately
+      - name: Close issue instantly
         if: steps.check.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh issue close "$ISSUE_URL" --comment "⚡ Closed instantly for Quickdraw badge 🏆 — $(date -u)"
+          gh issue close "$ISSUE_URL" --comment "⚡ Closed for Quickdraw — $(date -u)"
+
+      - name: Notify Telegram
+        if: steps.check.outputs.skip != 'true' && env.TELEGRAM_BOT_TOKEN != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d chat_id="$TELEGRAM_CHAT_ID" \
+            -d text="⚡ *Quickdraw badge earned!*%0AIssue opened and closed in seconds 🤠" \
+            -d parse_mode="Markdown" || true
