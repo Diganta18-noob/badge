@@ -17,7 +17,7 @@ on:
 #    1. Enabling Discussions on the repo
 #    2. Creating discoverable Discussion questions
 #    3. Tracking your progress
-#    4. Sending Telegram reminders
+#    4. Sending Telegram reminders with direct action links
 
 jobs:
   galaxy-brain:
@@ -43,7 +43,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
-          # Try to enable discussions (requires repo admin)
           gh api repos/$REPO \
             --method PATCH \
             -f has_discussions=true 2>/dev/null || echo "Could not enable Discussions — enable manually in Settings"
@@ -54,22 +53,51 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
-          # Create a Q&A discussion that others can answer
-          TOPICS=("How to automate GitHub badges?" "Best GitHub Actions tips?" "How to get more stars on repos?" "Favorite GitHub features in 2025?" "Tips for open source contributions?")
-          TOPIC=${TOPICS[$((RANDOM % ${#TOPICS[@]}))]}
+          # Rotate through engaging topics that attract real answers
+          DAY_OF_YEAR=$(date +%j)
+          TOPICS=(
+            "What's your favorite GitHub Action for CI/CD?"
+            "Best practices for automating GitHub workflows?"
+            "How do you organize your GitHub profile README?"
+            "What tools do you use for GitHub badge hunting?"
+            "Share your best GitHub Actions workflow tips!"
+            "How do you automate your development workflow?"
+            "What's the most useful GitHub feature you've discovered?"
+            "Best GitHub CLI commands you use daily?"
+            "How do you manage multiple GitHub repositories?"
+            "What's your strategy for open source contributions?"
+          )
+          INDEX=$((DAY_OF_YEAR % ${#TOPICS[@]}))
+          TOPIC="${TOPICS[$INDEX]}"
+
+          # Get repo node ID
+          REPO_ID=$(gh api repos/$REPO --jq '.node_id' 2>/dev/null)
           
-          gh api graphql -f query='
-            mutation {
-              createDiscussion(input: {
-                repositoryId: "'$(gh api repos/$REPO --jq '.node_id')'"
-                categoryId: "'$(gh api repos/$REPO/discussions/categories --jq '.[0].node_id // empty' 2>/dev/null || echo "")'"
-                title: "'"$TOPIC"'"
-                body: "Share your tips and experiences! 🧠\n\n_Created by Badge Bot — answer this to help earn Galaxy Brain badges!_"
-              }) {
-                discussion { url }
+          # Get Q&A category ID (or first available)
+          CAT_ID=$(gh api repos/$REPO/discussions/categories \
+            --jq '[.[] | select(.name == "Q&A" or .slug == "q-a")] | .[0].node_id // empty' 2>/dev/null)
+          
+          if [ -z "$CAT_ID" ]; then
+            CAT_ID=$(gh api repos/$REPO/discussions/categories \
+              --jq '.[0].node_id // empty' 2>/dev/null)
+          fi
+
+          if [ -n "$CAT_ID" ] && [ -n "$REPO_ID" ]; then
+            gh api graphql -f query='
+              mutation {
+                createDiscussion(input: {
+                  repositoryId: "'"$REPO_ID"'"
+                  categoryId: "'"$CAT_ID"'"
+                  title: "'"$TOPIC"'"
+                  body: "Share your tips and experiences! 🧠\n\nThis is a community discussion — your answers help everyone learn.\n\n_🤖 Badge Bot — answer this to help earn Galaxy Brain badges!_"
+                }) {
+                  discussion { url }
+                }
               }
-            }
-          ' 2>/dev/null || echo "⚠️ Could not create Discussion — ensure Discussions are enabled with Q&A category"
+            ' 2>/dev/null && echo "✅ Discussion created: $TOPIC" || echo "⚠️ Could not create Discussion"
+          else
+            echo "⚠️ Missing repo ID or category — enable Discussions with Q&A category in Settings"
+          fi
 
       - name: Create tracking issue
         env:
@@ -90,6 +118,11 @@ jobs:
              → [GitHub Discussions Search](https://github.com/search?q=is%3Aopen+is%3Aunanswered+type%3Adiscussions&type=discussions)
           2. Post a thorough, helpful answer
           3. Wait for the author to mark it as ✅ Accepted
+
+          ### Best Repos to Answer In:
+          - [vercel/next.js](https://github.com/vercel/next.js/discussions)
+          - [microsoft/vscode](https://github.com/microsoft/vscode/discussions)
+          - [facebook/react](https://github.com/facebook/react/discussions)
 
           ### Tiers:
           | Tier | Accepted Answers |
@@ -113,15 +146,19 @@ jobs:
           }
 
       - name: Telegram reminder
-        if: env.TELEGRAM_BOT_TOKEN != ''
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          MSG="🧠 *Galaxy Brain Reminder*%0A%0A"
-          MSG+="Go answer Discussion questions!%0A"
-          MSG+="🔗 [Search unanswered Discussions](https://github.com/search?q=is%3Aopen+is%3Aunanswered+type%3Adiscussions&type=discussions)%0A%0A"
-          MSG+="Need: 1 accepted answer for Bronze"
+          [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
+          MSG="🧠 *Galaxy Brain — Daily Action Required*%0A"
+          MSG+="━━━━━━━━━━━━━━━━━━━━━━%0A%0A"
+          MSG+="📝 *Go answer Discussion questions now!*%0A%0A"
+          MSG+="🔗 Quick Links:%0A"
+          MSG+="• [Unanswered Discussions](https://github.com/search?q=is%3Aopen+is%3Aunanswered+type%3Adiscussions&type=discussions)%0A"
+          MSG+="• [Next.js Discussions](https://github.com/vercel/next.js/discussions)%0A"
+          MSG+="• [VS Code Discussions](https://github.com/microsoft/vscode/discussions)%0A%0A"
+          MSG+="💡 Tip: Answer thoroughly → get accepted → earn badge!"
           curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
             -d chat_id="$TELEGRAM_CHAT_ID" \
             -d text="$MSG" \

@@ -1,6 +1,8 @@
 name: "🔗 Pair Extraordinaire Hunter"
 
 on:
+  schedule:
+    - cron: '0 14 * * *'     # daily at 2 PM UTC (7:30 PM IST)
   workflow_dispatch:
     inputs:
       coauthor_username:
@@ -14,7 +16,7 @@ on:
       count:
         description: 'How many co-authored PRs to create (1-10)'
         required: false
-        default: '1'
+        default: '3'
   workflow_call:
     inputs:
       coauthor_username:
@@ -25,10 +27,17 @@ on:
         default: 'octocat@users.noreply.github.com'
       count:
         type: string
-        default: '1'
+        default: '3'
 
 # Pair Extraordinaire: Co-author a merged PR
 # Bronze: 1, Silver: 10, Gold: 24
+#
+# ⚠️ IMPORTANT: For the badge to count, the co-author must be a REAL
+#    GitHub user. Replace 'octocat' with a real friend's username.
+#
+# 🔧 To set your co-author permanently, add these repo secrets:
+#    PAIR_COAUTHOR_USERNAME = friend's GitHub username
+#    PAIR_COAUTHOR_EMAIL = friend@users.noreply.github.com
 
 jobs:
   pair-commit:
@@ -42,55 +51,93 @@ jobs:
         run: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
     steps:
+      - name: Set co-author details
+        id: coauthor
+        run: |
+          # Priority: workflow input > repo secret > default
+          USERNAME="${{ inputs.coauthor_username || '' }}"
+          EMAIL="${{ inputs.coauthor_email || '' }}"
+
+          # If no input, try secrets
+          if [ -z "$USERNAME" ] || [ "$USERNAME" = "octocat" ]; then
+            SECRET_USER="${{ secrets.PAIR_COAUTHOR_USERNAME || '' }}"
+            if [ -n "$SECRET_USER" ]; then
+              USERNAME="$SECRET_USER"
+              EMAIL="${{ secrets.PAIR_COAUTHOR_EMAIL || '' }}"
+              [ -z "$EMAIL" ] && EMAIL="${SECRET_USER}@users.noreply.github.com"
+            fi
+          fi
+
+          # Final fallback
+          [ -z "$USERNAME" ] && USERNAME="octocat"
+          [ -z "$EMAIL" ] && EMAIL="octocat@users.noreply.github.com"
+
+          echo "username=$USERNAME" >> $GITHUB_OUTPUT
+          echo "email=$EMAIL" >> $GITHUB_OUTPUT
+          echo "🔗 Co-author: $USERNAME <$EMAIL>"
+
       - name: Check if this run is needed
         id: should-run
         run: |
-          if [ "${{ matrix.run }}" -le "${{ inputs.count || '1' }}" ]; then
+          COUNT="${{ inputs.count || '3' }}"
+          if [ "${{ matrix.run }}" -le "$COUNT" ]; then
             echo "run=true" >> $GITHUB_OUTPUT
           else
             echo "run=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Checkout
+      - name: Check if Gold already reached
         if: steps.should-run.outputs.run == 'true'
+        id: gold-check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Count pair PRs specifically
+          PAIR_COUNT=$(gh pr list --repo "${{ github.repository }}" --state merged --search "Pair" --limit 999 --json number | jq length)
+          echo "count=$PAIR_COUNT" >> $GITHUB_OUTPUT
+          if [ "$PAIR_COUNT" -ge 24 ]; then
+            echo "🥇 Pair Extraordinaire GOLD reached! Stopping."
+            echo "stop=true" >> $GITHUB_OUTPUT
+          else
+            echo "stop=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout
+        if: steps.should-run.outputs.run == 'true' && steps.gold-check.outputs.stop != 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Configure Git
-        if: steps.should-run.outputs.run == 'true'
+        if: steps.should-run.outputs.run == 'true' && steps.gold-check.outputs.stop != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git pull origin main --rebase || true
 
       - name: Create co-authored commit
-        if: steps.should-run.outputs.run == 'true'
-        env:
-          COAUTHOR_USER: ${{ inputs.coauthor_username }}
-          COAUTHOR_EMAIL: ${{ inputs.coauthor_email }}
+        if: steps.should-run.outputs.run == 'true' && steps.gold-check.outputs.stop != 'true'
         run: |
-          BRANCH="pair-$(date +%s)-$RANDOM"
+          BRANCH="pair-$(date +%s)-$RANDOM-${{ matrix.run }}"
           git checkout -b "$BRANCH"
           mkdir -p logs
-          echo "🔗 Pair #${{ matrix.run }} with $COAUTHOR_USER at $(date -u)" >> logs/pair-log.txt
+          echo "🔗 Pair #${{ matrix.run }} with ${{ steps.coauthor.outputs.username }} at $(date -u)" >> logs/pair-log.txt
           git add logs/pair-log.txt
           git commit -m "chore: pair session #${{ matrix.run }}
 
-          Co-authored-by: $COAUTHOR_USER <$COAUTHOR_EMAIL>"
+          Co-authored-by: ${{ steps.coauthor.outputs.username }} <${{ steps.coauthor.outputs.email }}>"
           git push origin "$BRANCH"
           echo "BRANCH=$BRANCH" >> $GITHUB_ENV
 
       - name: Create & Merge PR
-        if: steps.should-run.outputs.run == 'true'
+        if: steps.should-run.outputs.run == 'true' && steps.gold-check.outputs.stop != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COAUTHOR_USER: ${{ inputs.coauthor_username }}
         run: |
           PR_URL=$(gh pr create \
-            --title "🔗 Pair with @$COAUTHOR_USER #${{ matrix.run }}" \
+            --title "🔗 Pair with @${{ steps.coauthor.outputs.username }} #${{ matrix.run }}" \
             --body "Co-authored PR for Pair Extraordinaire 🏆
-          **Co-author:** @$COAUTHOR_USER
+          **Co-author:** @${{ steps.coauthor.outputs.username }}
           🤖 Badge Bot | $(date -u)" \
             --base main \
             --head "$BRANCH")
@@ -101,18 +148,34 @@ jobs:
           done
 
       - name: Cleanup
-        if: steps.should-run.outputs.run == 'true' && success()
+        if: steps.should-run.outputs.run == 'true' && steps.gold-check.outputs.stop != 'true' && success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: git push origin --delete "$BRANCH" || true
 
+      - name: Check tier unlock
+        if: steps.should-run.outputs.run == 'true' && steps.gold-check.outputs.stop != 'true'
+        id: tier
+        run: |
+          TOTAL=$((${{ steps.gold-check.outputs.count }} + ${{ matrix.run }}))
+          if [ "$TOTAL" -eq 1 ]; then
+            echo "unlocked=🥉 Pair Extraordinaire BRONZE unlocked!" >> $GITHUB_OUTPUT
+          elif [ "$TOTAL" -eq 10 ]; then
+            echo "unlocked=🥈 Pair Extraordinaire SILVER unlocked!" >> $GITHUB_OUTPUT
+          elif [ "$TOTAL" -eq 24 ]; then
+            echo "unlocked=🥇 Pair Extraordinaire GOLD unlocked! 🎉" >> $GITHUB_OUTPUT
+          else
+            echo "unlocked=" >> $GITHUB_OUTPUT
+          fi
+
       - name: Notify Telegram
-        if: steps.should-run.outputs.run == 'true' && env.TELEGRAM_BOT_TOKEN != ''
+        if: steps.should-run.outputs.run == 'true' && steps.tier.outputs.unlocked != ''
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
+          [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
           curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
             -d chat_id="$TELEGRAM_CHAT_ID" \
-            -d text="🔗 Pair Extraordinaire — PR #${{ matrix.run }} merged with @${{ inputs.coauthor_username }}" \
+            -d text="🎉 *BADGE TIER UNLOCKED!*%0A${{ steps.tier.outputs.unlocked }}%0A%0A🔗 Co-author: @${{ steps.coauthor.outputs.username }}" \
             -d parse_mode="Markdown" || true

@@ -7,8 +7,8 @@ on:
   workflow_call:
 
 # Open Sourcerer: Have PRs merged across MULTIPLE public repos
-# This workflow forks popular repos with "good first issue" labels,
-# then creates PRs with documentation/typo fixes.
+# This workflow finds real contribution opportunities and sends
+# direct links via Telegram for you to act on.
 # ⚠️ Beta badge — may or may not be awarded
 
 jobs:
@@ -30,26 +30,49 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git pull origin main --rebase || true
 
-      - name: Find repos to contribute to
+      - name: Find contribution opportunities
+        id: find-repos
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🌐 Open Sourcerer — Searching for contribution opportunities..."
-          echo ""
-          echo "Strategy: Contribute to multiple public repos"
-          echo ""
-          echo "Good targets:"
-          echo "  1. Repos with 'good first issue' labels"
-          echo "  2. Documentation repos needing typo fixes"
-          echo "  3. Repos with 'help wanted' labels"
+          echo "🌐 Searching for contribution opportunities..."
           echo ""
 
-          # Search for good-first-issue repos
-          gh api search/issues \
-            -f q="label:\"good first issue\" state:open language:markdown" \
-            -f per_page=5 \
-            --jq '.items[] | "→ \(.repository_url | split("/") | .[-2:] | join("/")): \(.title)"' \
-            2>/dev/null || echo "Search API rate limited"
+          # Search for good-first-issue in different languages
+          OPPORTUNITIES=""
+
+          echo "=== JavaScript/TypeScript repos ==="
+          JS_REPOS=$(gh api search/issues \
+            -f q="label:\"good first issue\" state:open language:javascript" \
+            -f per_page=3 \
+            --jq '.items[] | "• [\(.repository_url | split("/") | .[-2:] | join("/"))] \(.title) → \(.html_url)"' \
+            2>/dev/null || echo "Rate limited")
+          echo "$JS_REPOS"
+          OPPORTUNITIES+="$JS_REPOS\n"
+
+          echo ""
+          echo "=== Documentation fixes ==="
+          DOC_REPOS=$(gh api search/issues \
+            -f q="label:\"good first issue\" label:\"documentation\" state:open" \
+            -f per_page=3 \
+            --jq '.items[] | "• [\(.repository_url | split("/") | .[-2:] | join("/"))] \(.title) → \(.html_url)"' \
+            2>/dev/null || echo "Rate limited")
+          echo "$DOC_REPOS"
+          OPPORTUNITIES+="$DOC_REPOS\n"
+
+          echo ""
+          echo "=== Help Wanted ==="
+          HELP_REPOS=$(gh api search/issues \
+            -f q="label:\"help wanted\" state:open language:python" \
+            -f per_page=3 \
+            --jq '.items[] | "• [\(.repository_url | split("/") | .[-2:] | join("/"))] \(.title) → \(.html_url)"' \
+            2>/dev/null || echo "Rate limited")
+          echo "$HELP_REPOS"
+          OPPORTUNITIES+="$HELP_REPOS"
+
+          echo "opportunities<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$OPPORTUNITIES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create contribution tracker
         env:
@@ -85,7 +108,7 @@ jobs:
 
           ---
           *🤖 Badge Bot*" || {
-              echo "::warning::Failed to create issue! Please ensure 'Allow GitHub Actions to create and approve pull requests' is checked in Settings -> Actions -> General."
+              echo "::warning::Failed to create issue!"
             }
           fi
 
@@ -99,16 +122,21 @@ jobs:
             git push origin main || true
           }
 
-      - name: Telegram reminder
-        if: env.TELEGRAM_BOT_TOKEN != ''
+      - name: Telegram — contribution opportunities
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          MSG="🌐 *Open Sourcerer Reminder*%0A%0A"
-          MSG+="Contribute to other public repos!%0A"
-          MSG+="🔗 [Good First Issues](https://github.com/search?q=label%3A%22good+first+issue%22+state%3Aopen&type=issues)%0A%0A"
-          MSG+="Fix typos, docs, or small bugs in different repos."
+          [ -z "$TELEGRAM_BOT_TOKEN" ] && exit 0
+          MSG="🌐 *Open Sourcerer — Fresh Opportunities*%0A"
+          MSG+="━━━━━━━━━━━━━━━━━━━━━━%0A%0A"
+          MSG+="🎯 *Contribute to earn the badge!*%0A%0A"
+          MSG+="🔗 Quick Links:%0A"
+          MSG+="• [Good First Issues (JS)](https://github.com/search?q=label%3A%22good+first+issue%22+state%3Aopen+language%3Ajavascript&type=issues)%0A"
+          MSG+="• [Good First Issues (Python)](https://github.com/search?q=label%3A%22good+first+issue%22+state%3Aopen+language%3Apython&type=issues)%0A"
+          MSG+="• [Documentation Fixes](https://github.com/search?q=label%3A%22good+first+issue%22+label%3A%22documentation%22+state%3Aopen&type=issues)%0A"
+          MSG+="• [Help Wanted](https://github.com/search?q=label%3A%22help+wanted%22+state%3Aopen&type=issues)%0A%0A"
+          MSG+="💡 Fix a typo, improve docs, or solve a small bug!"
           curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
             -d chat_id="$TELEGRAM_CHAT_ID" \
             -d text="$MSG" \

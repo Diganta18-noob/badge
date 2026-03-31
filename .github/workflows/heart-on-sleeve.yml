@@ -4,6 +4,7 @@ on:
   schedule:
     - cron: '0 8 * * *'     # daily at 8 UTC
   workflow_dispatch:
+  workflow_call:
 
 # Heart On Your Sleeve: React with ❤️ emoji on GitHub
 # ⚠️ This badge is in BETA — may not be consistently awarded
