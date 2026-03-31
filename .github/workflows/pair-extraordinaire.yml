@@ -8,11 +8,11 @@ on:
       coauthor_username:
         description: 'Co-author GitHub username'
         required: true
-        default: 'octocat'
+        default: 'liner14'
       coauthor_email:
         description: 'Co-author email (username@users.noreply.github.com)'
         required: true
-        default: 'octocat@users.noreply.github.com'
+        default: 'akash.maity067@gmail.com'
       count:
         description: 'How many co-authored PRs to create (1-10)'
         required: false
@@ -21,10 +21,10 @@ on:
     inputs:
       coauthor_username:
         type: string
-        default: 'octocat'
+        default: 'liner14'
       coauthor_email:
         type: string
-        default: 'octocat@users.noreply.github.com'
+        default: 'akash.maity067@gmail.com'
       count:
         type: string
         default: '3'
@@ -36,8 +36,8 @@ on:
 #    GitHub user. Replace 'octocat' with a real friend's username.
 #
 # 🔧 To set your co-author permanently, add these repo secrets:
-#    PAIR_COAUTHOR_USERNAME = friend's GitHub username
-#    PAIR_COAUTHOR_EMAIL = friend@users.noreply.github.com
+#    PAIR_COAUTHOR_USERNAME = liner14
+#    PAIR_COAUTHOR_EMAIL = akash.maity067@gmail.com
 
 jobs:
   pair-commit:
@@ -59,7 +59,7 @@ jobs:
           EMAIL="${{ inputs.coauthor_email || '' }}"
 
           # If no input, try secrets
-          if [ -z "$USERNAME" ] || [ "$USERNAME" = "octocat" ]; then
+          if [ -z "$USERNAME" ]; then
             SECRET_USER="${{ secrets.PAIR_COAUTHOR_USERNAME || '' }}"
             if [ -n "$SECRET_USER" ]; then
               USERNAME="$SECRET_USER"
@@ -69,8 +69,8 @@ jobs:
           fi
 
           # Final fallback
-          [ -z "$USERNAME" ] && USERNAME="octocat"
-          [ -z "$EMAIL" ] && EMAIL="octocat@users.noreply.github.com"
+          [ -z "$USERNAME" ] && USERNAME="liner14"
+          [ -z "$EMAIL" ] && EMAIL="akash.maity067@gmail.com"
 
           echo "username=$USERNAME" >> $GITHUB_OUTPUT
           echo "email=$EMAIL" >> $GITHUB_OUTPUT
