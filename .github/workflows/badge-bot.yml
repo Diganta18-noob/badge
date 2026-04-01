@@ -133,7 +133,7 @@ jobs:
 
       - name: Gather badge stats
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           # Count merged PRs (Pull Shark progress)

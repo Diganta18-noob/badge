@@ -17,7 +17,7 @@ jobs:
       - name: Check if already earned
         id: check
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           COUNT=$(gh issue list --repo "$REPO" --search "Quickdraw" --state all --limit 1 --json number | jq length)
@@ -31,7 +31,7 @@ jobs:
       - name: Open issue
         if: steps.check.outputs.skip != 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           ISSUE_URL=$(gh issue create \
@@ -44,7 +44,7 @@ jobs:
       - name: Close issue instantly
         if: steps.check.outputs.skip != 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           gh issue close "$ISSUE_URL" --comment "⚡ Closed for Quickdraw — $(date -u)"
 

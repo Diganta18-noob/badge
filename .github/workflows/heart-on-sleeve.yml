@@ -21,7 +21,7 @@ jobs:
     steps:
       - name: React with ❤️ to recent items
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           echo "❤️ Heart On Your Sleeve — reacting to content..."

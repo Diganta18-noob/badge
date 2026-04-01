@@ -90,7 +90,7 @@ jobs:
         if: steps.should-run.outputs.run == 'true'
         id: gold-check
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           # Count pair PRs specifically
           PAIR_COUNT=$(gh pr list --repo "${{ github.repository }}" --state merged --search "Pair" --limit 999 --json number | jq length)
@@ -111,8 +111,8 @@ jobs:
       - name: Configure Git
         if: steps.should-run.outputs.run == 'true' && steps.gold-check.outputs.stop != 'true'
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
           git pull origin main --rebase || true
 
       - name: Create co-authored commit
@@ -132,7 +132,7 @@ jobs:
       - name: Create & Merge PR
         if: steps.should-run.outputs.run == 'true' && steps.gold-check.outputs.stop != 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           PR_URL=$(gh pr create \
             --title "🔗 Pair with @${{ steps.coauthor.outputs.username }} #${{ matrix.run }}" \
@@ -150,7 +150,7 @@ jobs:
       - name: Cleanup
         if: steps.should-run.outputs.run == 'true' && steps.gold-check.outputs.stop != 'true' && success()
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: git push origin --delete "$BRANCH" || true
 
       - name: Check tier unlock

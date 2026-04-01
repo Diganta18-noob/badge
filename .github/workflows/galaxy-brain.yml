@@ -35,13 +35,13 @@ jobs:
 
       - name: Configure Git
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
           git pull origin main --rebase || true
 
       - name: Enable Discussions via API
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           gh api repos/$REPO \
@@ -51,7 +51,7 @@ jobs:
       - name: Create helpful Discussion question
         if: inputs.enable_discussions == true || inputs.enable_discussions == ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           # Rotate through engaging topics that attract real answers
@@ -102,7 +102,7 @@ jobs:
 
       - name: Create tracking issue
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           COUNT=$(gh issue list --repo "$REPO" --search "Galaxy Brain Tracker" --state open --limit 1 --json number | jq length)
