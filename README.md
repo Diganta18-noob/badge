@@ -45,7 +45,7 @@
 **CRITICAL:** For the badges to be credited to YOUR profile instead of the bot, you must use a Personal Access Token.
 1. Go to [Personal Access Tokens (classic)](https://github.com/settings/tokens).
 2. Click **Generate new token (classic)**.
-3. Check the **`repo`** and **`discussion`** scopes.
+3. Check the **`repo`** scope (this gives the bot permission to create PRs and discussions).
 4. Generate the token and copy it.
 5. Go to your Badge Hunter repository **Settings** → **Secrets and variables** → **Actions**.
 6. Add a new repository secret named `GH_PAT` and paste your token.
