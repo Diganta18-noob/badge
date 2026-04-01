@@ -40,14 +40,24 @@
 
 ## ⚡ Setup (5 minutes)
 
-### Step 1 — Repo Settings
+### Step 1 — Personal Access Token (GH_PAT)
+
+**CRITICAL:** For the badges to be credited to YOUR profile instead of the bot, you must use a Personal Access Token.
+1. Go to [Personal Access Tokens (classic)](https://github.com/settings/tokens).
+2. Click **Generate new token (classic)**.
+3. Check the **`repo`** and **`discussion`** scopes.
+4. Generate the token and copy it.
+5. Go to your Badge Hunter repository **Settings** → **Secrets and variables** → **Actions**.
+6. Add a new repository secret named `GH_PAT` and paste your token.
+
+### Step 2 — Repo Settings
 
 1. Go to **Settings** → **Actions** → **General**
 2. **Workflow permissions** → ✅ **Read and write permissions**
 3. ✅ **Allow GitHub Actions to create and approve pull requests**
 4. **Save**
 
-### Step 2 — Telegram Bot (for live notifications)
+### Step 3 — Telegram Bot (for live notifications)
 
 1. Open Telegram → search **@BotFather** → `/newbot`
 2. Copy the **bot token**
@@ -60,7 +70,7 @@
    - Add secret: `TELEGRAM_BOT_TOKEN` = your bot token
    - Add secret: `TELEGRAM_CHAT_ID` = your chat ID
 
-### Step 3 — Launch! 🚀
+### Step 4 — Launch! 🚀
 
 Go to **Actions** tab → **Badge Bot Master** → **Run workflow**
 
