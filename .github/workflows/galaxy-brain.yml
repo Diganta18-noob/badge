@@ -29,7 +29,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -50,10 +50,13 @@ jobs:
 
       - name: Create helpful Discussion question
         if: inputs.enable_discussions == true || inputs.enable_discussions == ''
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
+          set +e  # Don't exit on errors — we handle them gracefully
+
           # Rotate through engaging topics that attract real answers
           DAY_OF_YEAR=$(date +%j)
           TOPICS=(
@@ -72,15 +75,19 @@ jobs:
           TOPIC="${TOPICS[$INDEX]}"
 
           # Get repo node ID
-          REPO_ID=$(gh api repos/$REPO --jq '.node_id' 2>/dev/null)
-          
+          REPO_ID=$(gh api repos/$REPO --jq '.node_id' 2>/dev/null || echo "")
+          if [ -z "$REPO_ID" ]; then
+            echo "⚠️ Could not fetch repo node ID — check token permissions"
+            exit 0
+          fi
+
           # Get Q&A category ID (or first available)
           CAT_ID=$(gh api repos/$REPO/discussions/categories \
-            --jq '[.[] | select(.name == "Q&A" or .slug == "q-a")] | .[0].node_id // empty' 2>/dev/null)
-          
+            --jq '[.[] | select(.name == "Q&A" or .slug == "q-a")] | .[0].node_id // empty' 2>/dev/null || echo "")
+
           if [ -z "$CAT_ID" ]; then
             CAT_ID=$(gh api repos/$REPO/discussions/categories \
-              --jq '.[0].node_id // empty' 2>/dev/null)
+              --jq '.[0].node_id // empty' 2>/dev/null || echo "")
           fi
 
           if [ -n "$CAT_ID" ] && [ -n "$REPO_ID" ]; then
@@ -95,10 +102,12 @@ jobs:
                   discussion { url }
                 }
               }
-            ' 2>/dev/null && echo "✅ Discussion created: $TOPIC" || echo "⚠️ Could not create Discussion"
+            ' 2>/dev/null && echo "✅ Discussion created: $TOPIC" || echo "⚠️ Could not create Discussion — check GH_PAT permissions"
           else
             echo "⚠️ Missing repo ID or category — enable Discussions with Q&A category in Settings"
           fi
+
+          exit 0  # Always succeed
 
       - name: Create tracking issue
         env:
